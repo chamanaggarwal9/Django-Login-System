@@ -7,11 +7,12 @@ from django.contrib.auth import authenticate
 from django.conf import settings
 from account.models import UserData
 from django.core.mail import send_mail
+import re
 # Create your views here.
 
 @csrf_exempt
 @api_view(['POST'])
-def Registration(request):
+def User_Registration(request):
 
     if(request.method=='POST'):
 
@@ -25,10 +26,11 @@ def Registration(request):
 
             if not user_exists:
                 if(password1 != password2):
-                    return JsonResponse({'success':False, 'comments':'Password should be same'})
+                    return JsonResponse({'status':False, 'message':'Passwords should be same'})
 
-                if len(password1) < 8:
-                    return JsonResponse({'success':False, 'comments':'Password should be atleast 8 characters'})
+                check_password = Password_Validation(password1)
+                if(check_password != True):
+                    return JsonResponse({'status':False, 'message':check_password})
 
                 user = UserData.objects.create_user(email=email, password=password1)
                 user.full_name = name
@@ -39,12 +41,29 @@ def Registration(request):
                 user.save()
 
                 Activation_Request(email, token)
-                return JsonResponse({'success':True, 'comments':'User has been registered'})
+                return JsonResponse({'status':True, 'message':'User has been registered, Please check your mail and activate your account'})
             else:
-                return JsonResponse({'success':False, 'comments':'User already exist'})
+                return JsonResponse({'status':False, 'message':'User already exist, Please login'})
         
         except Exception as e:
-            return JsonResponse({'success':False, 'comments':'Oops, something went wrong!'})
+            return JsonResponse({'status':False, 'message':'Oops, something went wrong!'})
+
+def Password_Validation(password):
+    if len(password) < 8:
+        return 'Password should be atleast 8 characters'
+    checkUpperCase = any(ele.isupper() for ele in password)
+    checkLowerCase = any(ele.islower() for ele in password)
+    specialSymbol= re.compile('[@_!#$%^&*()<>?/\|}{~:]').search(password)
+    contains_digit = any(map(str.isdigit, password))
+    if not checkUpperCase:
+        return 'Password doesnt contain any upper case character'
+    if not checkLowerCase:
+        return 'Password doesnt contain any lower case character'
+    if not specialSymbol:
+        return 'Password doesnt contain any special character'
+    if not contains_digit:
+        return 'Password doesnt contain any digit'
+    return True
 
 
 def Activation_Request(email, token):
@@ -61,12 +80,12 @@ def Confirm_Activation(request, token):
 
     if user:
         if user.user_verified:
-            return JsonResponse({'success':False, 'comments':'User account already activated'})
+            return JsonResponse({'status':False, 'message':'User account already activated'})
         user.user_verified = True
         user.save()
-        return JsonResponse({'success':True, 'comments':'User account successfully activated'})
+        return JsonResponse({'status':True, 'message':'User account successfully activated'})
     else:
-        return JsonResponse({'success':False, 'comments':'User account deleted'})
+        return JsonResponse({'status':False, 'message':'User account deleted'})
 
 
 @csrf_exempt
@@ -74,7 +93,6 @@ def Confirm_Activation(request, token):
 def Login(request):
 
     if(request.method == 'POST'):
-
         try:
             email = request.POST['email']
             password = request.POST['password']
@@ -84,14 +102,14 @@ def Login(request):
                 if user.user_verified:
                     user.user_logged_in = True
                     user.save()
-                    return JsonResponse({'success':True, 'comments':'User loggged in successfully'})
+                    return JsonResponse({'status':True, 'message':'User loggged in successfully'})
                 else:
-                    return JsonResponse({'success':False, 'comments':'User account not activated'})
+                    return JsonResponse({'status':False, 'message':'User account not activated'})
             else:
-                return JsonResponse({'success':False, 'comments':'User account credentials not correct'})
+                return JsonResponse({'status':False, 'message':'User account credentials not correct'})
         
         except Exception as e:
-                return JsonResponse({'success':False, 'comments':'Oops, something went wrong!'})
+                return JsonResponse({'status':False, 'message':'Oops, something went wrong!'})
 
 
 @csrf_exempt
@@ -99,7 +117,6 @@ def Login(request):
 def Forget_Password(request):
 
     if(request.method=='POST'):
-
         try:
             email = request.POST['email']
             user = UserData.objects.filter(email=email).first()
@@ -110,12 +127,12 @@ def Forget_Password(request):
                 email_from = settings.EMAIL_HOST_USER
                 recipient_list = [email]
                 send_mail(subject, message, email_from, recipient_list)
-                return JsonResponse({'success':True, 'comments':'Email sent for reset password'})
+                return JsonResponse({'status':True, 'message':'Email sent for reset password'})
             else:
-                return JsonResponse({'success':False, 'comments':'User email doesnt exist'})
+                return JsonResponse({'status':False, 'message':'User email doesnt exist'})
 
         except Exception as e:
-            return JsonResponse({'success':False, 'comments':'Oops, something went wrong!'})
+            return JsonResponse({'status':False, 'message':'Oops, something went wrong!'})
             
 
 @csrf_exempt
@@ -130,15 +147,17 @@ def Reset_Password(request, token):
             user = UserData.objects.filter(token_auth=token).first()
             if user:
                 if(password1 != password2):
-                    return JsonResponse({'success':False, 'comments':'Passwords didnt matched'})
-                if len(password1) < 8:
-                    return JsonResponse({'success':False, 'comments':'Password should be atleast 8 characters'})
+                    return JsonResponse({'status':False, 'message':'Passwords didnt matched'})
+                
+                check_password = Password_Validation(password1)
+                if(check_password != True):
+                    return JsonResponse({'status':False, 'message':check_password})
 
                 user.set_password(password1)
                 user.save()
-                return JsonResponse({'success':True, 'comments':'Account password changed'})
+                return JsonResponse({'status':True, 'message':'Account password changed'})
             else:
-                return JsonResponse({'success':False, 'comments':'User didnt exist'})
+                return JsonResponse({'status':False, 'message':'User doesnt exist'})
         
         except Exception as e:
-            return JsonResponse({'success':False, 'comments':'Oops, something went wrong!'})
+            return JsonResponse({'status':False, 'message':'Oops, something went wrong!'})
